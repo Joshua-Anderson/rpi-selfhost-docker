@@ -56,8 +56,6 @@
     - name: install duplicity
       apt:
         name: duplicity
-      notify:
-        - install bkup key
     - name: create cfg dir
       file:
         path: /usr/local/cfg

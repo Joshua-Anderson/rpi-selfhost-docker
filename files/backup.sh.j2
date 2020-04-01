@@ -1,0 +1,4 @@
+#!/bin/bash
+
+duplicity --no-encryption --full-if-older-than 1W --ssh-options="-oIdentityFile='/usr/local/cfg/bkup_id'" \
+/usr/local/persist rsync://bkup@{{ builder_url }}/{{ ansible_hostname }}

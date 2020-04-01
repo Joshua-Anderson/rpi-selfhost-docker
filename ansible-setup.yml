@@ -1,0 +1,340 @@
+- hosts: all
+  become: yes
+  vars_files:
+    - example_vars.yml
+  tasks:
+    - name: disable wifi
+      lineinfile:
+        path: /boot/config.txt
+        regexp: "^dtoverlay=disable-wifi"
+        insertafter: "^[all]"
+        line: "dtoverlay=disable-wifi"
+    - name: disable bluetooth
+      lineinfile:
+        path: /boot/config.txt
+        regexp: "^dtoverlay=disable-bt"
+        insertafter: "^[all]"
+        line: "dtoverlay=disable-bt"
+    - name: enable static ipv6 addr
+      lineinfile:
+        path: /etc/dhcpcd.conf
+        regexp: "^slaac"
+        line: "slaac hwaddr"
+      notify:
+        - reload dhcpd
+    - name: add apt https support
+      apt:
+        name: apt-transport-https
+    - name: add pip
+      apt:
+        name: python3-pip
+    - name: add unattented upgrades
+      apt:
+        name: unattended-upgrades
+    - name: configure unattended upgrades
+      lineinfile:
+        path: /etc/apt/apt.conf.d/50unattended-upgrades
+        insertafter: "^Unattended-Upgrade::Origins-Pattern"
+        regexp: '^"origin=Raspbian'
+        line: '"origin=Raspbian,codename=${distro_codename},label=Raspbian";'
+    - name: docker apt key
+      apt_key:
+        url: https://download.docker.com/linux/raspbian/gpg
+        state: present
+    - name: add docker repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/raspbian buster stable
+        state: present
+    - name: skip installing aufs with docker
+      copy:
+        src: files/aufs-tools
+        dest: /etc/apt/preferences.d/aufs-tools
+    - name: install docker
+      apt:
+        name: docker-ce
+        update_cache: yes
+    - name: install duplicity
+      apt:
+        name: duplicity
+      notify:
+        - install bkup key
+    - name: create cfg dir
+      file:
+        path: /usr/local/cfg
+        state: directory
+    - name: create persistent dir
+      file:
+        path: /usr/local/persist
+        state: directory
+    - name: copy docker cfg
+      copy:
+        src: files/docker-daemon-cfg.json
+        dest: /etc/docker/daemon.json
+      notify:
+        - reload docker
+    - name: copy telegraf cfg
+      template:
+        src: files/telegraf.conf.j2
+        dest: /usr/local/cfg/telegraf.conf
+    - name: copy rsyslog cfg
+      copy:
+        src: files/rsyslog-fwd-to-telegraf.conf
+        dest: /etc/rsyslog.d/42-fwd-to-telegraf.conf
+      notify:
+        - reload rsyslog
+    - name: install docker py
+      pip:
+        name: docker
+  handlers:
+    - name: reload docker
+      systemd:
+        name: docker
+        state: reloaded
+    - name: reload dhcpd
+      systemd:
+        name: dhcpcd
+        state: reloaded
+    - name: reload rsyslog
+      systemd:
+        name: rsyslog
+        state: restarted
+- hosts: builder
+  become: yes
+  tasks:
+    - name: create backup user
+      user:
+        name: bkup
+        comment: Backup account
+    - name: create backend bkup dir
+      file:
+        path: /home/bkup/backend
+        state: directory
+        owner: bkup
+    - name: create frontend bkup dir
+      file:
+        path: /home/bkup/frontend
+        state: directory
+        owner: bkup
+- hosts: backend
+  become: yes
+  vars_files:
+    - example_vars.yml
+  tasks:
+    # HACK: start postgres first so that it has time to come up before the handlers connect to it.
+    # waiting for postgresql to come up within the container is hard.
+    - name: start postgres
+      docker_container:
+        name: postgres
+        image: postgres:12.2-alpine
+        restart_policy: always
+        ports:
+          - "5432:5432"
+        env:
+          POSTGRES_PASSWORD: "{{ postgres_pass }}"
+          POSTGRES_DB: "miniflux"
+        volumes:
+          - "/usr/local/persist/postgres:/var/lib/postgresql/data"
+      notify:
+        - create gitea db
+        - create gitea permissions
+    - name: create monitoring network
+      docker_network:
+        name: monitoring
+    - name: start influxdb
+      docker_container:
+        name: influxdb
+        image: influxdb:1.7
+        restart_policy: always
+        networks_cli_compatible: no
+        networks:
+          - name: monitoring
+        ports:
+          - "8086:8086"
+        env:
+          INFLUXDB_HTTP_AUTH_ENABLED: "true"
+          INFLUXDB_DB: telegraf
+          INFLUXDB_ADMIN_USER: admin
+          INFLUXDB_ADMIN_USER_PASSWORD: "{{ influxdb_admin_pass }}"
+          INFLUXDB_WRITE_USER: telegraf_write
+          INFLUXDB_WRITE_USER_PASSWORD: "{{ influxdb_telegraf_pass }}"
+          INFLUXDB_READ_USER: chronograf_read
+          INFLUXDB_READ_USER_PASSWORD: "{{ influxdb_chronograf_pass }}"
+        volumes:
+          - "/usr/local/persist/influxdb:/var/lib/influxdb"
+    - name: start chronograf
+      docker_container:
+        name: chronograf
+        image: chronograf:1.8
+        command: "chronograf --influxdb-url=http://influxdb:8086 --influxdb-username=chronograf_read --influxdb-password={{ influxdb_chronograf_pass }}"
+        restart_policy: always
+        networks_cli_compatible: no
+        networks:
+          - name: monitoring
+        ports:
+          - "8888:8888"
+        volumes:
+          - "/usr/local/persist/chronograf:/var/lib/chronograf"
+    - name: create backup key
+      openssh_keypair:
+        group: root
+        owner: root
+        path: /usr/local/cfg/bkup_id
+      register: backend_ssh_key
+    - name: install backup key
+      delegate_to: "{{ builder_url }}"
+      authorized_key:
+        key: "{{ backend_ssh_key.public_key }}"
+        comment: "{{ ansible_hostname }}"
+        user: bkup
+    - name: copy bkup script
+      template:
+        src: files/backup.sh.j2
+        dest: /usr/local/bin/cluster_backup.sh
+        owner: root
+        mode: "0700"
+    - name: backup cronjob
+      cron:
+        name: "backup cronjob"
+        minute: "0"
+        hour: "3"
+        day: "*/2"
+        job: "/usr/local/bin/cluster_backup.sh"
+  handlers:
+    - name: create gitea db
+      docker_container:
+        name: postgres_gitea_create
+        image: postgres:12.2-alpine
+        command: "psql postgresql://postgres:{{ postgres_pass }}@postgres -c 'CREATE DATABASE gitea;'"
+        detach: no
+        links:
+          - "postgres:postgres"
+    - name: create gitea permissions
+      docker_container:
+        name: postgres_gitea_perms
+        image: postgres:12.2-alpine
+        command: "psql postgresql://postgres:{{ postgres_pass }}@postgres -c 'GRANT ALL PRIVILEGES ON DATABASE gitea TO postgres;'"
+        detach: no
+        links:
+          - "postgres:postgres"
+- hosts: all
+  become: yes
+  tasks:
+    - name: start telegraf
+      docker_container:
+        name: telegraf
+        image: telegraf:1.13
+        hostname: "{{ ansible_hostname }}-telegraf"
+        restart_policy: always
+        ports:
+          - "127.0.0.1:1111:1111/udp"
+        env:
+          HOST_ETC: "/hostfs/etc"
+          HOST_PROC: "/hostfs/proc"
+          HOST_SYS: "/hostfs/sys"
+          HOST_MOUNT_PREFIX: "/hostfs"
+        volumes:
+          - "/:/hostfs:ro"
+          - "/etc:/hostfs/etc:ro"
+          - "/proc:/hostfs/proc:ro"
+          - "/sys:/hostfs/sys:ro"
+          - "/var/run/utmp:/var/run/utmp:ro"
+          - "/var/run/docker.sock:/var/run/docker.sock:ro"
+          - "/usr/local/cfg/telegraf.conf:/etc/telegraf/telegraf.conf:ro"
+- hosts: frontend
+  become: yes
+  vars_files:
+    - example_vars.yml
+  tasks:
+    - name: copy caddy cfg
+      template:
+        src: files/Caddyfile.j2
+        dest: /usr/local/cfg/Caddyfile
+    - name: create frontend network
+      docker_network:
+        name: frontend
+    - name: start miniflux
+      docker_container:
+        name: miniflux
+        image: miniflux/miniflux:2.0.20
+        restart_policy: always
+        networks_cli_compatible: yes # remove the default network
+        networks:
+          - name: frontend
+        env:
+          DATABASE_URL: "postgres://postgres:{{ postgres_pass }}@{{ backend_url }}/miniflux?sslmode=disable"
+          BASE_URL: "https://{{ miniflux_url }}"
+          PROXY_IMAGES: all
+      notify:
+        - migrate miniflux db
+    - name: start gitea
+      docker_container:
+        name: gitea
+        image: patrickthedev/gitea-rpi:latest-1.11
+        restart_policy: always
+        networks_cli_compatible: yes # remove the default network
+        networks:
+          - name: frontend
+        env:
+          GITEA_CUSTOM: /data
+          RUN_MODE: prod
+          DISABLE_SSH: "true"
+          ROOT_URL: "https://{{ gitea_url }}/"
+          LFS_START_SERVER: "true"
+          DB_TYPE: postgres
+          DB_HOST: "{{ backend_url }}:5432"
+          DB_NAME: gitea
+          DB_USER: postgres
+          DB_PASSWD: "{{ postgres_pass }}"
+        volumes:
+          - /usr/local/persist/gitea:/data
+          - /etc/timezone:/etc/timezone:ro
+          - /etc/localtime:/etc/localtime:ro
+    - name: start caddy
+      docker_container:
+        name: caddy
+        image: joshuaanderson/caddy:2.0.0-beta.20
+        restart_policy: always
+        networks_cli_compatible: no
+        networks:
+          - name: frontend
+        ports:
+          - "80:80"
+          - "443:443"
+        volumes:
+          - "/usr/local/persist/caddy/data:/data"
+          - "/usr/local/persist/caddy/config:/config"
+          - "/usr/local/cfg/Caddyfile:/etc/caddy/Caddyfile:ro"
+    - name: create backup key
+      openssh_keypair:
+        group: root
+        owner: root
+        path: /usr/local/cfg/bkup_id
+      register: frontend_ssh_key
+    - name: install backup key
+      delegate_to: "{{ builder_url }}"
+      authorized_key:
+        key: "{{ frontend_ssh_key.public_key }}"
+        comment: "{{ ansible_hostname }}"
+        user: bkup
+    - name: copy bkup script
+      template:
+        src: files/backup.sh.j2
+        dest: /usr/local/bin/cluster_backup.sh
+        owner: root
+        mode: "0700"
+    - name: backup cronjob
+      cron:
+        name: "backup cronjob"
+        minute: "0"
+        hour: "3"
+        day: "*/2"
+        job: "/usr/local/bin/cluster_backup.sh"
+  handlers:
+    - name: migrate miniflux db
+      docker_container:
+        name: miniflux_migrate
+        image: miniflux/miniflux:2.0.20
+        command: "/usr/bin/miniflux -migrate"
+        detach: no
+        env:
+          DATABASE_URL: "postgres://postgres:{{ postgres_pass }}@{{ backend_url }}/miniflux?sslmode=disable"

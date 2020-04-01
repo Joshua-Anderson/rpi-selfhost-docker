@@ -1,0 +1,21 @@
+{
+  email {{ letsencrypt_email }}.
+  # uncomment to use letsencrypt staging for testing
+  #acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+http://{{ miniflux_url }} {
+  redir https://{{ miniflux_url }}{uri}
+}
+
+https://{{ miniflux_url }} {
+  reverse_proxy http://miniflux:8080
+}
+
+http://{{ gitea_url }} {
+  redir https://{{ gitea_url }}{uri}
+}
+
+https://{{ gitea_url }} {
+  reverse_proxy http://gitea:3000
+}

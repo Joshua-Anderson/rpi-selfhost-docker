@@ -1,0 +1,64 @@
+[agent]
+  interval = "10s"
+
+# OUTPUTS
+[[outputs.influxdb]]
+  url = "http://{{ backend_url }}:8086" # required.
+  username = "telegraf_write"
+  password = "{{ influxdb_telegraf_pass }}"
+  database = "telegraf" # required.
+  precision = "s"
+
+# INPUTS
+[[inputs.cpu]]
+  # Whether to report per-cpu stats or not
+  percpu = true
+  # Whether to report total system cpu stats or not
+  totalcpu = true
+  # If true, collect raw CPU time metrics.
+  collect_cpu_time = false
+  # If true, compute and report the sum of all non-idle CPU states.
+  report_active = false
+
+[[inputs.disk]]
+  ## Ignore mount points by filesystem type.
+  ignore_fs = ["tmpfs", "devtmpfs", "devfs"]
+
+# Read metrics about disk IO by device
+[[inputs.diskio]]
+
+# Get kernel statistics from /proc/stat
+[[inputs.kernel]]
+
+# Read metrics about memory usage
+[[inputs.mem]]
+
+# Get the number of processes and group them by status
+[[inputs.processes]]
+
+# Read metrics about swap memory usage
+[[inputs.swap]]
+
+# Read metrics about system load & uptime
+[[inputs.system]]
+
+# Read metrics about network interface usage
+[[inputs.net]]
+
+[[inputs.syslog]]
+  server = "udp://:1111"
+
+# Read metrics about docker containers
+[[inputs.docker]]
+  endpoint = "unix:///var/run/docker.sock"
+  ## Set to true to collect Swarm metrics(desired_replicas, running_replicas)
+  gather_services = false
+  container_name_include = []
+  container_name_exclude = []
+  ## Timeout for docker list, info, and stats commands
+  timeout = "5s"
+  ## Whether to report for each container per-device blkio (8:0, 8:1...) and
+  ## network (eth0, eth1, ...) stats or not
+  perdevice = true
+  ## Whether to report for each container total blkio and network stats or not
+  total = false

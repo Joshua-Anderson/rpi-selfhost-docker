@@ -1,0 +1,9 @@
+
+[builder]
+builder.example.com ansible_connection=ssh ansible_user=pi ansible_python_interpreter=/usr/bin/python3
+
+[backend]
+backend.example.com ansible_connection=ssh ansible_user=pi ansible_python_interpreter=/usr/bin/python3
+
+[frontend]
+frontend.example.com ansible_connection=ssh ansible_user=pi ansible_python_interpreter=/usr/bin/python3

@@ -159,6 +159,8 @@
           INFLUXDB_READ_USER_PASSWORD: "{{ influxdb_chronograf_pass }}"
         volumes:
           - "/usr/local/persist/influxdb:/var/lib/influxdb"
+      notify:
+        - create influxdb retention policy
     - name: start chronograf
       docker_container:
         name: chronograf
@@ -214,6 +216,12 @@
         detach: no
         links:
           - "postgres:postgres"
+    - name: create influxdb retention policy
+      docker_container:
+        name: influxdb_retention_policy
+        image: influxdb:1.7
+        command: "influx -host '{{ backend_url }}' -username admin -password {{ influxdb_admin_pass }} -execute 'alter retention policy autogen on telegraf duration 60d'"
+        detach: no
 - hosts: all
   become: yes
   tasks:

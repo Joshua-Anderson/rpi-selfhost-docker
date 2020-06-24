@@ -32,9 +32,9 @@ You should also change the default password on the raspberry pis and setup ssh k
 access the pis.
 
 1. Update the urls in the `example_hosts` file to point to your three raspberry pis
-2. Set the passwords and variables in the `example_vars.yml` file.
-   Caddy's automatic ssl certificate creation process uses letsencrypt, so make sure that your
-   gitea and miniflux dns entries are good before running the playbook!
+2. Set the passwords and variables in the `example_vars.yml` file. Caddy will automatically use
+   letsencrypt to create ssl certificates, so make sure that your gitea and miniflux dns entries are
+   good before running the playbook!
 3. Run `ansible-playbook -i example_hosts ansible-setup.yml` to configure the raspberry pis.
    Ansible script are mostly immutable, so they can be safely re-run if any errors come up in the progress.
 4. Setup the first miniflux user by sshing into the frontend pi and running `sudo docker exec -it miniflux /usr/bin/miniflux -create-admin`
@@ -128,9 +128,6 @@ management benefits of kubernetes.
 
 ## Todo
 
-- I have to build my own caddy container because there is no offical arm7l docker container yet.
-  The caddy docker team is working on a multi-arch build [here](https://github.com/caddyserver/caddy-docker/issues/9).
-  Since I'm using the same dockerfile, migrating when they release an offical image should be easy.
 - Setup automated encrypted offsite backups.
 - Setup minio/caddy for serving static files.
 - Setup a coredns server to act as a dns-over-tls proxy for the network.

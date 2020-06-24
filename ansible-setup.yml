@@ -259,11 +259,11 @@
         networks:
           - name: frontend
         env:
+          POLLING_FREQUENCY: "10"
           DATABASE_URL: "postgres://postgres:{{ postgres_pass }}@{{ backend_url }}/miniflux?sslmode=disable"
           BASE_URL: "https://{{ miniflux_url }}"
+          RUN_MIGRATIONS: "1"
           PROXY_IMAGES: all
-      notify:
-        - migrate miniflux db
     - name: start gitea
       docker_container:
         name: gitea
@@ -327,12 +327,3 @@
         hour: "3"
         day: "*/2"
         job: "/usr/local/bin/cluster_backup.sh"
-  handlers:
-    - name: migrate miniflux db
-      docker_container:
-        name: miniflux_migrate
-        image: miniflux/miniflux:2.0.20
-        command: "/usr/bin/miniflux -migrate"
-        detach: no
-        env:
-          DATABASE_URL: "postgres://postgres:{{ postgres_pass }}@{{ backend_url }}/miniflux?sslmode=disable"

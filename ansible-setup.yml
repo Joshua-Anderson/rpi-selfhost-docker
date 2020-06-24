@@ -275,7 +275,7 @@
     - name: start gitea
       docker_container:
         name: gitea
-        image: patrickthedev/gitea-rpi:latest-1.11
+        image: quay.io/joshuaanderson/gitea:1.12.1
         restart_policy: always
         networks_cli_compatible: yes # remove the default network
         networks:

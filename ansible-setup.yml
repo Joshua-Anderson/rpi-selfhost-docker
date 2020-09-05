@@ -298,7 +298,7 @@
     - name: start caddy
       docker_container:
         name: caddy
-        image: caddy:2.0.0
+        image: caddy:2.1.1
         restart_policy: always
         networks_cli_compatible: no
         networks:

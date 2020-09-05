@@ -261,7 +261,7 @@
     - name: start miniflux
       docker_container:
         name: miniflux
-        image: miniflux/miniflux:2.0.22
+        image: miniflux/miniflux:2.0.23
         restart_policy: always
         networks_cli_compatible: yes # remove the default network
         networks:

@@ -141,7 +141,7 @@
     - name: start influxdb
       docker_container:
         name: influxdb
-        image: influxdb:1.7
+        image: influxdb:1.8.2
         restart_policy: always
         networks_cli_compatible: no
         networks:
@@ -157,6 +157,8 @@
           INFLUXDB_WRITE_USER_PASSWORD: "{{ influxdb_telegraf_pass }}"
           INFLUXDB_READ_USER: chronograf_read
           INFLUXDB_READ_USER_PASSWORD: "{{ influxdb_chronograf_pass }}"
+          INFLUXDB_HTTP_LOG_ENABLED: "false"
+          INFLUXDB_DATA_QUERY_LOG_ENABLED: "false"
         volumes:
           - "/usr/local/persist/influxdb:/var/lib/influxdb"
       notify:

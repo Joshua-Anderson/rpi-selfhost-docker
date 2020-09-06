@@ -230,7 +230,7 @@
     - name: start telegraf
       docker_container:
         name: telegraf
-        image: telegraf:1.13
+        image: telegraf:1.15.2
         hostname: "{{ ansible_hostname }}-telegraf"
         restart_policy: always
         ports:

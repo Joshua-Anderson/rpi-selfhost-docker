@@ -96,6 +96,12 @@ I opted not to go with encrypted backups because the `/usr/local/persist` direct
 on the frontend and the backend. This means that encryption would only provide benefits if somebody
 hacked into the builder pi but not the other two, which I consider to be a low risk.
 
+Additionally, I have script that runs weekly and replicates the backups on the builder pi to a
+google cloud storage bucket. These backups are encrypted with the supplied pgp key, so they should
+be unrecoverable to anybody except the user. Note that duplicity's backup replication functionality
+requires duplicity > 0.8 and will not work out of the box with raspbian. I wound up manually
+installing duplicity on this machine until a new enough version of duplicity lands in raspbian,
+which should be within the next six months.
 
 ## Monitoring
 
@@ -109,7 +115,7 @@ To send the docker container and host logs to influxdb, I configured docker to l
 ## Software Updates
 
 The ansible playbook is setup to automatically install updates nightly on all of the pis.
-It is not setup automatically reboot after kernel upgrades, so I reccommend checking every week
+It is not setup automatically reboot after kernel upgrades, so I recommend checking every week
 to see if the pis need to be rebooted.
 
 Any of the containers can be upgraded by changing the image version in the ansible playbook and re-running it.
@@ -128,7 +134,6 @@ management benefits of kubernetes.
 
 ## Todo
 
-- Setup automated encrypted offsite backups.
 - Setup minio/caddy for serving static files.
 - Setup a coredns server to act as a dns-over-tls proxy for the network.
 - tls encrypted postgres connections

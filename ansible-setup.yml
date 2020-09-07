@@ -98,6 +98,8 @@
         state: restarted
 - hosts: builder
   become: yes
+  vars_files:
+    - example_vars.yml
   tasks:
     - name: create backup user
       user:
@@ -113,6 +115,18 @@
         path: /home/bkup/frontend
         state: directory
         owner: bkup
+    - name: copy gcs backup script
+      template:
+        src: files/backup_gcs.sh.j2
+        dest: /usr/local/bin/backup_gcs.sh
+        mode: u=rwx,g=r,o=
+    - name: backup gcs cronjob
+      cron:
+        name: "backup to gcs cronjob"
+        minute: "0"
+        hour: "3"
+        day: "*/7"
+        job: "/usr/local/bin/backup_gcs.sh"
 - hosts: backend
   become: yes
   vars_files:

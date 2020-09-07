@@ -1,0 +1,8 @@
+#!/bin/bash
+
+export GS_ACCESS_KEY_ID="{{ gcs_bkup_access_key }}"
+export GS_SECRET_ACCESS_KEY="{{ gcs_bkup_secret }}"
+export PASSPHRASE=""
+
+duplicity replicate --encrypt-key {{ pgp_key_id }} file:///home/bkup/frontend gs:///rpi-cluster-bkup/frontend
+duplicity replicate --encrypt-key {{ pgp_key_id }} file:///home/bkup/backend gs:///rpi-cluster-bkup/backend

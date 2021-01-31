@@ -277,7 +277,7 @@
     - name: start miniflux
       docker_container:
         name: miniflux
-        image: miniflux/miniflux:2.0.23
+        image: miniflux/miniflux:2.0.27
         restart_policy: always
         networks_cli_compatible: yes # remove the default network
         networks:
@@ -291,7 +291,7 @@
     - name: start gitea
       docker_container:
         name: gitea
-        image: patrickthedev/gitea-rpi:1.12.4
+        image: patrickthedev/gitea-rpi:1.13.1
         restart_policy: always
         networks_cli_compatible: yes # remove the default network
         networks:
